@@ -1,0 +1,240 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration scan="true" scanPeriod="60 seconds" debug="false">
+    <!--定义日志文件的存储地址和前缀名-->
+    <property name="LOG_HOME" value="log" />
+    <property name="PROJECT" value="openapi" />
+    <property name="ELK_SOURCE" value="openapi" />
+	
+	
+	<!--输出到控制台 ConsoleAppender-->
+    <appender name="console" class="ch.qos.logback.core.ConsoleAppender">
+        <!--展示格式 layout-->
+        <encoder>
+            <charset>UTF-8</charset>
+            <pattern>%d [%t] %-5level %logger{36}.%M\(%file:%line\) - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+	<!-- 全部日志（每天一个） -->
+	<appender name="ALL_LOG" class="ch.qos.logback.core.rolling.RollingFileAppender">
+		<encoder>
+			<charset>UTF-8</charset>
+			<pattern>[${PROJECT}] %d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level [%logger{100}.%-3line] %msg%n</pattern>
+		</encoder>
+		
+		<!--滚动策略，按照时间滚动 TimeBasedRollingPolicy-->
+		<rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+			<fileNamePattern>${LOG_HOME}/${PROJECT}-%d{yyyy-MM-dd}-%i.log</fileNamePattern>
+			<!-- 单个日志文件最多 100MB -->
+            <maxFileSize>100MB</maxFileSize>
+            <!--只保留最近30天的日志-->
+            <maxHistory>30</maxHistory>
+            <!--用来指定日志文件的上限大小，那么到了这个值，就会删除旧的日志-->
+            <!--<totalSizeCap>1GB</totalSizeCap>-->
+		</rollingPolicy>
+	</appender>
+
+	<!-- ERROR日志（每天一个） -->
+	<appender name="ERR_LOG"
+		class="ch.qos.logback.core.rolling.RollingFileAppender">
+		<encoder>
+			<pattern>[${PROJECT}] %d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level [%logger{100}.%-3line] %msg%n</pattern>
+		</encoder>
+		<rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+			<FileNamePattern>${LOG_HOME}/${PROJECT}-err-%d{yyyy-MM-dd}-%i.log</FileNamePattern>
+			<!-- 单个日志文件最多 100MB -->
+            <maxFileSize>100MB</maxFileSize>
+            <!--只保留最近30天的日志-->
+            <maxHistory>30</maxHistory>
+            <!--用来指定日志文件的上限大小，那么到了这个值，就会删除旧的日志-->
+            <!--<totalSizeCap>1GB</totalSizeCap>-->
+		</rollingPolicy>
+		
+		<filter class="ch.qos.logback.classic.filter.LevelFilter">
+			<level>ERROR</level>
+			<!--没有匹配到就允许-->
+			<onMatch>ACCEPT</onMatch>
+			 <!--匹配到就禁止-->
+			<onMismatch>DENY</onMismatch>
+		</filter>
+	</appender>
+	
+	<!-- ELK -->
+	<appender name="STASH-REDIS" class="com.yichuan.wuzhenpay.openapi.base.mvc.log.appender.RedisAppender">
+		<initRedis>false</initRedis>
+	    <!-- 项目节点（这里取节点名称，唯一） -->
+	    <source>${ELK_SOURCE}</source>
+	    <!-- 类型（这里取大项目名称，以便为每个大项目建立索引文件） -->
+	    <type>openapi</type>
+	    <!-- 标记（这里取dev/ci/test/prod环境标识） -->
+	    <tags>online</tags>
+	    <!-- redis地址 -->
+	    <host>127.0.0.1</host>
+	    <!-- redis端口 -->
+	    <port>6380</port>
+	    <!-- redis键 -->
+	    <key>openapi</key>
+	    <mdc>true</mdc>
+	    <location>true</location>
+	    <callerStackIndex>0</callerStackIndex>
+	</appender>
+	
+	<appender name="ASYNC_REDIS" class="ch.qos.logback.classic.AsyncAppender">
+		<!-- 不丢失日志.默认的,如果队列的80%已满,则会丢弃TRACT、DEBUG、INFO级别的日志 -->
+		<discardingThreshold>1</discardingThreshold>
+		<!-- 更改默认的队列的深度,该值会影响性能.默认值为256 -->
+		<queueSize>1024</queueSize>
+        <!-- 不阻塞 -->
+        <neverBlock>true</neverBlock>
+        
+        <!-- 关联STASH-REDIS -->
+		<appender-ref ref="STASH-REDIS" />
+	</appender>
+	
+	<appender name="ASYNC_ALL_LOG" class="ch.qos.logback.classic.AsyncAppender">
+		<!-- 不丢失日志.默认的,如果队列的80%已满,则会丢弃TRACT、DEBUG、INFO级别的日志 -->
+		<discardingThreshold>1</discardingThreshold>
+		<!-- 更改默认的队列的深度,该值会影响性能.默认值为256 -->
+		<queueSize>1024</queueSize>
+        <!-- 不阻塞 -->
+        <neverBlock>true</neverBlock>
+        
+        <!-- 关联ALL_LOG -->
+		<appender-ref ref="ALL_LOG" />
+	</appender>
+	
+
+	<!-- 总开关 -->
+	<root level="INFO">
+		<appender-ref ref="console"/>
+		<appender-ref ref="ERR_LOG" />
+		<appender-ref ref="ASYNC_ALL_LOG" />
+		<!-- <appender-ref ref="ASYNC_REDIS" /> -->
+	</root>
+	
+	
+	
+	<logger name="GWS" level="info" additivity="false">
+		<appender-ref ref="ALL_LOG" />
+		<appender-ref ref="ERR_LOG" />
+		<appender-ref ref="console"/>
+		<appender-ref ref="STASH-REDIS" />
+	</logger>
+	
+	<!-- 日志过滤 -->
+    <!-- 控制第三方日志输入级别 -->
+	<logger name="org.springframework" level="INFO" additivity="false">
+		<appender-ref ref="ALL_LOG" />
+	</logger>
+	
+    <logger name="org.springframework.remoting" level="ERROR" additivity="false">
+    	<appender-ref ref="ERR_LOG" />
+    </logger>
+    
+	<logger name="org.springframework.remoting.caucho" level="INFO" additivity="false">
+		<appender-ref ref="ALL_LOG" />
+	</logger>
+	
+	<logger name="org.springframework.transaction" level="INFO" additivity="false">
+		<appender-ref ref="ALL_LOG" />
+	</logger>
+	<logger name="org.springframework.jdbc" level="INFO" additivity="false">
+		<appender-ref ref="ALL_LOG" />
+	</logger>
+	
+    <logger name="org.springframework.data.mongodb" level="DEBUG" additivity="false">
+    	<appender-ref ref="ALL_LOG" />
+    </logger>
+    
+	<logger name="org.mybatis" level="INFO" additivity="false">
+		<appender-ref ref="ALL_LOG" />
+	</logger>
+	
+	<logger name="org.apache.catalina.core" level="ERROR" additivity="false">
+		<appender-ref ref="ERR_LOG" />
+	</logger>
+	
+    <logger name="org.apache.activemq" level="INFO" additivity="false">
+    	<appender-ref ref="ALL_LOG" />
+    </logger>
+    
+    <logger name="org.apache.http" level="INFO" additivity="false">
+    	<appender-ref ref="ALL_LOG" />
+    </logger>
+    
+	<logger name="org.apache.zookeeper" level="ERROR" additivity="false">
+		<appender-ref ref="ERR_LOG" />
+	</logger>
+	<logger name="org.apache.zookeeper.ClientCnxn" level="ERROR" additivity="false">
+		<appender-ref ref="ERR_LOG" />
+	</logger>
+	
+    <logger name="org.apache.commons" level="INFO" additivity="false">
+    	<appender-ref ref="ALL_LOG" />
+    </logger>
+    
+	<logger name="org.apache.axis" level="INFO" additivity="false">
+		<appender-ref ref="ALL_LOG" />
+	</logger>
+	
+	<logger name="httpclient.wire.content" level="ERROR" additivity="false">
+		<appender-ref ref="ERR_LOG" />
+	</logger>
+	
+	<logger name="httpclient.wire.header" level="ERROR" additivity="false">
+		<appender-ref ref="ERR_LOG" />
+	</logger>
+	
+	<logger name="org.thymeleaf" level="ERROR" additivity="false">
+		<appender-ref ref="ERR_LOG" />
+	</logger>
+	
+	<logger name="org.springframework.security" level="ERROR" additivity="false">
+		<appender-ref ref="ERR_LOG" />
+	</logger>
+	
+	<logger name="com.alibaba.druid" level="ERROR" additivity="false">
+		<appender-ref ref="ERR_LOG" />
+	</logger>
+	
+	<logger name="io.lettuce.core" level="ERROR" additivity="false">
+		<appender-ref ref="ERR_LOG" />
+	</logger>
+	
+	<logger name="org.springframework.boot" level="ERROR" additivity="false">
+		<appender-ref ref="ERR_LOG" />
+	</logger>
+	
+	<logger name="org.apache.tomcat" level="INFO" additivity="false">
+		<appender-ref ref="ALL_LOG" />
+	</logger>
+	
+	<logger name="org.apache.tomcat" level="INFO" additivity="false">
+		<appender-ref ref="ALL_LOG" />
+	</logger>
+	
+	<logger name="com.xxl.job.core" level="error" additivity="false">
+		<appender-ref ref="ERR_LOG" />
+	</logger>
+	
+	<logger name="com.netflix" level="error" additivity="false">
+		<appender-ref ref="ERR_LOG" />
+	</logger>
+	
+	<logger name="springfox.documentation.spring.web" level="ERROR">
+		<appender-ref ref="ERR_LOG" />
+	</logger>
+	
+	<logger name="org.springframework.amqp" level="ERROR" additivity="false">
+		<appender-ref ref="ERR_LOG" />
+	</logger>
+	
+	<logger name="java.sql.Connection" level="ERROR" additivity="false">
+		<appender-ref ref="ERR_LOG" />
+	</logger>
+	
+	<logger name="java.sql.PreparedStatement" level="ERROR" additivity="false">
+		<appender-ref ref="ERR_LOG" />
+	</logger>
+	
+</configuration>

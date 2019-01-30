@@ -1,0 +1,233 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Configuration status="INFO" monitorInterval="30" packages="com.yichuan.wuzhenpay.openapi.base.mvc.log.appender">
+<!--
+Console节点中的PatternLayout定义了输出日志时的格式：
+%d{HH:mm:ss.SSS} 表示输出到毫秒的时间
+%t 输出当前线程名称
+%-5level 输出日志级别，-5表示左对齐并且固定输出5个字符，如果不足在右边补0
+%logger 输出logger名称，因为Root Logger没有名称，所以没有输出
+%msg 日志文本
+%n 换行
+其他常用的占位符有：
+%F 输出所在的类文件名，如Client.java
+%L 输出行号
+%M 输出所在方法名
+%l  输出语句所在的行数, 包括类名、方法名、文件名、行数
+-->
+
+	<Properties>
+		<property name="LOG_HOME" value="log" />
+    	<property name="PROJECT" value="openapi" />
+    	<property name="ELK_SOURCE" value="openapi" />
+	</Properties>
+
+	<Appenders>
+		
+		<Console name="console" target="SYSTEM_OUT" follow="true">
+			<PatternLayout
+				pattern="[%d{yyyy-MM-dd HH:mm:ss:SSS}] [%t] %-5p: %m%n" />
+		</Console>
+
+		<!-- 全部日志（每天一个） -->
+		<RollingFile name="ALL_LOG" fileName="${LOG_HOME}/${PROJECT}.log" filePattern="${LOG_HOME}/${PROJECT}-%d{yyyy-MM-dd}-%i.log">
+			<PatternLayout pattern="[%d{yyyy-MM-dd HH:mm:ss:SSS}] %-5p: %m%n" />
+			<Policies>
+				<!-- 按天进行更新机制 -->
+				<TimeBasedTriggeringPolicy interval="1" modulate="true" />
+				<!-- 每个文件大小策略限制 -->
+				<SizeBasedTriggeringPolicy size="100 MB" />
+			</Policies>
+			<!-- 最多保存多少个文件的限制 -->
+			<DefaultRolloverStrategy max="100">
+				<Delete basePath="${LOG_HOME}" maxDepth="1">
+	                 <IfFileName glob="${PROJECT}-*-*.log" />
+	                 <!-- 最多备份3天以内的日志 -->
+	                 <IfLastModified age="3d" />
+	        	</Delete>
+      	    </DefaultRolloverStrategy>
+		</RollingFile>
+
+	  <!-- ERROR日志（每天一个） -->
+	  <RollingFile name="ERR_LOG" fileName="${LOG_HOME}/${PROJECT}-error.log" filePattern="${LOG_HOME}/${PROJECT}-%d{yyyy-MM-dd}-%i.log">
+			<PatternLayout pattern="[%d{yyyy-MM-dd HH:mm:ss:SSS}] %-5p: %m%n" />
+			<Filters>
+                <ThresholdFilter level="error" onMatch="ACCEPT" onMismatch="DENY"/>
+            </Filters>
+			<Policies>
+				<!-- 按天进行更新机制 -->
+				<TimeBasedTriggeringPolicy/>
+				<!-- 每个文件大小策略限制 -->
+				<SizeBasedTriggeringPolicy size="500 MB" />
+			</Policies>
+			<!-- 最多保存多少个文件的限制 -->
+			<DefaultRolloverStrategy max="30">
+				<Delete basePath="${LOG_HOME}" maxDepth="1">
+	                 <IfFileName glob="${PROJECT}-error-*-*.log" />
+	                 <!-- 最多备份3天以内的日志 -->
+	                 <IfLastModified age="3d" />
+	        	</Delete>
+      	    </DefaultRolloverStrategy>
+		</RollingFile>
+
+		<RedisAppender name="REDIS" ignoreExceptions="true" debugEnabled="false">
+            <!-- 项目节点（这里取节点名称，唯一） -->
+		    <source>${ELK_SOURCE}</source>
+		    <!-- 类型（这里取大项目名称，以便为每个大项目建立索引文件） -->
+		    <type>openapi</type>
+		    <!-- 标记（这里取dev/ci/test/prod环境标识） -->
+		    <tags>online</tags>
+		    <!-- redis地址 -->
+		    <host>127.0.0.1</host>
+		    <!-- redis端口 -->
+		    <port>6380</port>
+		    <password></password>
+		    <!-- redis键 -->
+		    <key>log4j2-messages</key>
+		    
+            <PatternLayout pattern="%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level %class{36} %L %M - %msg%xEx%n"/>
+            <RedisConnectionPoolConfig testWhileIdle="true"
+                                       minEvictableIdleTimeMillis="60000"
+                                       timeBetweenEvictionRunsMillis="30000"
+                                       numTestsPerEvictionRun="-1"/>
+            <RedisThrottlerConfig bufferSize="100"
+                                  batchSize="10"
+                                  flushPeriodMillis="500"
+                                  maxEventCountPerSecond="0"
+                                  maxByteCountPerSecond="0"/>
+        </RedisAppender>
+	</Appenders>
+	
+	<Loggers>
+		<Root level="info">
+			<appender-ref ref="console"/>
+			<appender-ref ref="ALL_LOG" />
+			<appender-ref ref="ERR_LOG" />
+			<appender-ref ref="REDIS"/>
+		</Root>
+		
+		<logger name="GWS" level="info" additivity="false">
+			<appender-ref ref="console"/>
+			<appender-ref ref="ALL_LOG" />
+			<appender-ref ref="ERR_LOG" />
+			<appender-ref ref="REDIS"/>
+		</logger>
+
+		<!-- 日志过滤 -->
+		<!-- 控制第三方日志输入级别 -->
+		<logger name="org.springframework" level="INFO" additivity="false">
+			<appender-ref ref="ALL_LOG" />
+		</logger>
+
+		<logger name="org.springframework.remoting" level="ERROR" additivity="false">
+			<appender-ref ref="ERR_LOG" />
+		</logger>
+
+		<logger name="org.springframework.remoting.caucho" level="INFO" additivity="false">
+			<appender-ref ref="ALL_LOG" />
+		</logger>
+
+		<logger name="org.springframework.transaction" level="INFO" additivity="false">
+			<appender-ref ref="ALL_LOG" />
+		</logger>
+		
+		<logger name="org.springframework.jdbc" level="INFO" additivity="false">
+			<appender-ref ref="ALL_LOG" />
+		</logger>
+
+		<logger name="org.springframework.data.mongodb" level="DEBUG" additivity="false">
+			<appender-ref ref="ALL_LOG" />
+		</logger>
+
+		<logger name="org.mybatis" level="INFO" additivity="false">
+			<appender-ref ref="ALL_LOG" />
+		</logger>
+
+		<logger name="org.apache.catalina.core" level="ERROR" additivity="false">
+			<appender-ref ref="ERR_LOG" />
+		</logger>
+
+		<logger name="org.apache.activemq" level="INFO" additivity="false">
+			<appender-ref ref="ALL_LOG" />
+		</logger>
+
+		<logger name="org.apache.http" level="INFO" additivity="false">
+			<appender-ref ref="ALL_LOG" />
+		</logger>
+
+		<logger name="org.apache.zookeeper" level="ERROR" additivity="false">
+			<appender-ref ref="ERR_LOG" />
+		</logger>
+		
+		<logger name="org.apache.zookeeper.ClientCnxn" level="ERROR" additivity="false">
+			<appender-ref ref="ERR_LOG" />
+		</logger>
+
+		<logger name="org.apache.commons" level="INFO" additivity="false">
+			<appender-ref ref="ALL_LOG" />
+		</logger>
+
+		<logger name="org.apache.axis" level="INFO" additivity="false">
+			<appender-ref ref="ALL_LOG" />
+		</logger>
+
+		<logger name="httpclient.wire.content" level="ERROR" additivity="false">
+			<appender-ref ref="ERR_LOG" />
+		</logger>
+
+		<logger name="httpclient.wire.header" level="ERROR" additivity="false">
+			<appender-ref ref="ERR_LOG" />
+		</logger>
+
+		<logger name="org.thymeleaf" level="ERROR" additivity="false">
+			<appender-ref ref="ERR_LOG" />
+		</logger>
+
+		<logger name="org.springframework.security" level="ERROR" additivity="false">
+			<appender-ref ref="ERR_LOG" />
+		</logger>
+
+		<logger name="com.alibaba.druid" level="ERROR" additivity="false">
+			<appender-ref ref="ERR_LOG" />
+		</logger>
+
+		<logger name="io.lettuce.core" level="ERROR" additivity="false">
+			<appender-ref ref="ERR_LOG" />
+		</logger>
+
+		<logger name="org.springframework.boot" level="ERROR" additivity="false">
+			<appender-ref ref="ERR_LOG" />
+		</logger>
+
+		<logger name="org.apache.tomcat" level="INFO" additivity="false">
+			<appender-ref ref="ALL_LOG" />
+		</logger>
+
+		<logger name="org.apache.tomcat" level="INFO" additivity="false">
+			<appender-ref ref="ALL_LOG" />
+		</logger>
+
+		<logger name="com.xxl.job.core" level="error" additivity="false">
+			<appender-ref ref="ERR_LOG" />
+		</logger>
+
+		<logger name="com.netflix" level="error" additivity="false">
+			<appender-ref ref="ERR_LOG" />
+		</logger>
+
+		<logger name="springfox.documentation.spring.web" level="ERROR" additivity="false">
+			<appender-ref ref="ERR_LOG" />
+		</logger>
+
+		<logger name="org.springframework.amqp" level="ERROR" additivity="false">
+			<appender-ref ref="ERR_LOG" />
+		</logger>
+
+		<logger name="java.sql.Connection" level="ERROR" additivity="false">
+			<appender-ref ref="ERR_LOG" />
+		</logger>
+
+		<logger name="java.sql.PreparedStatement" level="ERROR" additivity="false">
+			<appender-ref ref="ERR_LOG" />
+		</logger>
+	</Loggers>
+</Configuration>
